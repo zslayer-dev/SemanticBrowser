@@ -1,0 +1,10 @@
+# 이 PoC에서 실제로 쓴 버전 (Windows, Python 3.12, CPU 전용)
+# torch는 CPU 빌드: pip install torch==2.15.0 --index-url https://download.pytorch.org/whl/cpu
+torch==2.15.0
+transformers==5.23.0
+huggingface_hub==2.4.0
+tokenizers==0.23.3
+safetensors==0.8.0
+sentencepiece==0.2.3
+numpy==2.5.4
+pillow==13.0.0

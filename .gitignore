@@ -5,3 +5,5 @@ thumbs/*
 results/*.html
 failed.csv
 manifest.csv
+.venv/
+__pycache__/
