@@ -16,6 +16,8 @@ UE5 프로젝트의 에셋을 한국어 문장으로 찾는 의미 검색 PoC입
 | `build_index.py` | 2단계: 이미지 임베딩 색인 `index.npz` 생성 | O |
 | `search.py` | 3단계: 문장 검색 (sigmoid 점수) | O |
 | `evaluate.py` | 4단계: 채점 → `results/<타임스탬프>/` | O |
+| `serve.py` | 에디터 연동용 로컬 검색 서버 (127.0.0.1) | O |
+| `ue/sb.py` | 에디터 Output Log에서 검색 → 콘텐츠 브라우저 선택 | O |
 | `thumbs/*.png`, `manifest.csv`, `failed.csv`, `index.npz`, `results/**/report.html` | 에셋에서 나온 산출물 | **X** (Fab/Epic 콘텐츠) |
 
 ## 준비
@@ -75,6 +77,30 @@ python tools/check_thumbs.py --dir thumbs --out thumbs/_check.csv --tol 12
 - `per_query.csv`: 질의별 상세
 - `sweep.csv`: 임계값별 집계
 - `report.html`: 썸네일로 눈 검산 (커밋 금지)
+
+## 에디터에서 쓰기
+
+UE에 들어 있는 Python에는 torch가 없습니다. 그래서 검색은 로컬 서버(`.venv`)가 맡고, 에디터는 질의 문장만 보냅니다. 서버는 127.0.0.1에서만 접속을 받습니다.
+
+1. 검색 서버를 켜 둡니다. 모델을 불러오는 데 몇 초가 걸리고, 이후 질의는 0.1초 안팎입니다.
+
+   ```bash
+   .venv/Scripts/python serve.py --index index.npz --manifest manifest.csv --port 8765 --default-k 10
+   ```
+
+2. 에디터의 Output Log 입력칸을 **Cmd**로 두고 아래처럼 입력합니다.
+
+   ```
+   py "C:/Claude/SemanticBrowser/ue/sb.py" 길가에 세운 가로등
+   py "C:/Claude/SemanticBrowser/ue/sb.py" 등불 --k 5
+   py "C:/Claude/SemanticBrowser/ue/sb.py" wooden fence --select name
+   ```
+
+   - Output Log에 SigLIP 2 순위와 이름 검색 순위를 함께 출력합니다.
+   - 콘텐츠 브라우저에서 결과 에셋을 선택해 보여 줍니다. 기본은 SigLIP 결과이고, `--select name`이면 이름 검색 결과, `--select none`이면 선택하지 않습니다.
+   - 기본은 임계값 없이 상위 k개를 보여 줍니다. PoC에서 한국어 임계값 구간이 매우 좁았기 때문입니다.
+
+에셋이 추가되면 1단계(썸네일)와 2단계(색인)를 다시 돌린 뒤 서버를 재시작하세요. 이미 있는 썸네일은 건너뛰고, 색인은 새 경로로 만들거나 기존 파일을 옮긴 뒤 만듭니다.
 
 ## 결과 해석
 
