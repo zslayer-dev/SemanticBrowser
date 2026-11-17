@@ -1,0 +1,14 @@
+id,query_ko,query_en,answers,traps,hard,absent,note
+q01,등불,lantern,SM_lantern_01;SM_lantern_02;SM_lantern_03;SM_lantern_rope_01,,0,0,이름 검색도 맞힐 쉬운 질의 (점검용)
+q02,노점 천막,market stall,SM_market_tent_01;SM_market_tent_02,,0,0,한국어와 이름 단어가 다름
+q03,폭포,waterfall,SM_waterfall,,0,0,이름 검색도 맞힐 쉬운 질의
+q04,짚으로 엮은 지붕,straw roof,SM_thatched_roof_01;SM_thatched_roof_02;SM_thatched_roof_03;SM_thatched_roof_04,,0,0,영어 질의 단어(straw)가 이름에 없음
+q05,사람 모양 돌 조각,stone figure of a person,SM_statue_01,,0,0,이름에 없는 표현
+q06,아치형 출입구,arched gateway,SM_wall_arch_01;SM_doorway_02,SM_doorway_01;SM_wall_wooden_arch_01;SM_wall_wooden_arch_02,1,0,어려움: 모두 확인함
+q07,늘어진 천 깃발,hanging cloth banner,SM_flag_banner_01;SM_flag_banner_02,,0,0,겉모습으로 찾기
+q08,꽃이 심긴 화분,planter with flowers,SM_flower_box_01;SM_stone_flower_bed_01;SM_stone_flower_bed_02,SM_bush_flower_01;SM_bush_flower_02,1,0,어려움: 셋 다 화분 확인함
+q09,길가에 세운 가로등,street lamp post,SM_lamppost_01;SM_lamppost_02;SM_lamppost_03,SM_lantern_01;SM_lantern_02;SM_lantern_03,1,0,어려움: lantern(등불)과 섞임
+q10,나무 울타리,wooden fence,SM_wooden_fence_01;SM_wooden_fence_02;SM_wooden_fence_03;SM_wooden_fence_04;SM_wooden_fence_05;SM_wooden_fence_06,SM_fence_01;SM_fence_02,0,0,fence_01·02는 돌 울타리 (확인함)
+q11,피자,pizza,,,0,1,
+q12,자동차,car,,,0,1,
+q13,컴퓨터,computer,,,0,1,

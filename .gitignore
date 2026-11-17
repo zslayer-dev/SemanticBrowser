@@ -1,0 +1,6 @@
+# 에셋에서 나온 산출물은 커밋하지 않음 (Fab/Epic 콘텐츠 재배포 방지)
+thumbs/
+*.npz
+results/*.html
+failed.csv
+manifest.csv
