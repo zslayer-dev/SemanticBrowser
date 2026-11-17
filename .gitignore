@@ -2,7 +2,7 @@
 thumbs/*
 !thumbs/CONDITIONS.md
 *.npz
-results/*.html
+results/**/*.html
 failed.csv
 manifest.csv
 .venv/
