@@ -86,6 +86,13 @@ python tools/check_thumbs.py --dir thumbs --out thumbs/_check.csv --tol 12
 
 - `tests/test_logic.py`: 모델 없이 도는 단위 테스트입니다. 정답표가 확정 커밋(`095c745`) 이후 바뀌지 않았는지, 점수 공식(sigmoid, softmax 아님), 정렬과 동점 처리, 기준선 이름 검색, 채점, 임계값 구간 계산을 검사합니다.
 - `tests/test_regression.py`: 커밋된 채점 결과(`results/20261117_171146/per_query.csv`)가 지금 코드로 그대로 재현되는지 검사합니다. `index.npz`가 있을 때만 돌고, 없으면 건너뜁니다.
+- `tests/test_ue_editor.py`: 실제 UE 5.8 에디터를 한 번 띄워서 확인하는 통합 테스트입니다(약 1분). 환경 변수 `SB_UE_EDITOR`, `SB_UPROJECT`가 없으면 건너뜁니다.
+  - 에디터 검색: `ue/sb.py`를 Output Log 명령으로 실행해, 결과가 `search.py`와 같은지와 콘텐츠 브라우저 선택까지 실행됐는지 봅니다.
+  - 썸네일 추출: `CONDITIONS.md`와 같은 조건으로 3개를 다시 찍어, 숫자 조건이 맞는지와 기존 PNG와 픽셀까지 같은지(재현성) 봅니다.
+
+  ```bash
+  SB_UE_EDITOR="C:/Program Files/Epic Games/UE_5.8/Engine/Binaries/Win64/UnrealEditor.exe" SB_UPROJECT="C:/Unreal Projects/LyraRPG/LyraRPG.uproject" .venv/Scripts/python -m unittest tests.test_ue_editor -v
+  ```
 
 ## 에디터에서 쓰기
 
