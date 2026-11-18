@@ -118,6 +118,23 @@ UE에 들어 있는 Python에는 torch가 없습니다. 그래서 검색은 로�
 
 에셋이 추가되면 1단계(썸네일)와 2단계(색인)를 다시 돌린 뒤 서버를 재시작하세요. 이미 있는 썸네일은 건너뛰고, 색인은 새 경로로 만들거나 기존 파일을 옮긴 뒤 만듭니다.
 
+### 에디터 검색 화면
+
+UE 5.8 에디터에서 `ue/sb.py`로 검색한 화면입니다. 2026-11-18에 `ue/screenshot_demo.py`로 자동 촬영했습니다.
+
+| `길가에 세운 가로등` | `나무 울타리` |
+|---|---|
+| ![가로등 검색](docs/screenshots/editor_search_streetlamp.png) | ![울타리 검색](docs/screenshots/editor_search_wooden_fence.png) |
+
+- 촬영 방법: Output Log와 콘텐츠 브라우저 탭을 열고 검색한 뒤, `EditorShot All` 명령으로 에디터 창만 찍습니다. 바탕화면이나 다른 프로그램은 찍히지 않습니다.
+- 다시 찍기: 검색 서버를 켠 상태에서 아래 명령을 실행합니다. BMP가 프로젝트의 `Saved/Screenshots/`에 생깁니다.
+
+  ```
+  UnrealEditor.exe "<프로젝트>.uproject" -ExecCmds="py C:/Claude/SemanticBrowser/ue/screenshot_demo.py --queries 길가에 세운 가로등|나무 울타리 --k 5 --wait-frames 300 --quit-when-done"
+  ```
+
+- 라이선스: 화면에 에셋이 보이지만, 콘텐츠로 만든 이미지의 배포는 [Epic 콘텐츠 라이선스](https://www.unrealengine.com/eula/content) 3(b)항과 [Fab EULA](https://www.fab.com/eula) 4(b)항에서 허용합니다. 썸네일 PNG 묶음(`thumbs/`)은 계속 커밋하지 않습니다.
+
 ## 결과 해석
 
 > Claude가 쓴 초안을 작성자가 검토함 (2026-11-18). 숫자는 모두 `results/20261117_171146/`에서 가져왔습니다. "추정"이라고 쓴 부분은 확인하지 않은 가설입니다.
