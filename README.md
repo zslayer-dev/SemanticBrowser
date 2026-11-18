@@ -78,6 +78,15 @@ python tools/check_thumbs.py --dir thumbs --out thumbs/_check.csv --tol 12
 - `sweep.csv`: 임계값별 집계
 - `report.html`: 썸네일로 눈 검산 (커밋 금지)
 
+## 테스트
+
+```bash
+.venv/Scripts/python -m unittest discover -s tests -v
+```
+
+- `tests/test_logic.py`: 모델 없이 도는 단위 테스트입니다. 정답표가 확정 커밋(`095c745`) 이후 바뀌지 않았는지, 점수 공식(sigmoid, softmax 아님), 정렬과 동점 처리, 기준선 이름 검색, 채점, 임계값 구간 계산을 검사합니다.
+- `tests/test_regression.py`: 커밋된 채점 결과(`results/20261117_171146/per_query.csv`)가 지금 코드로 그대로 재현되는지 검사합니다. `index.npz`가 있을 때만 돌고, 없으면 건너뜁니다.
+
 ## 에디터에서 쓰기
 
 UE에 들어 있는 Python에는 torch가 없습니다. 그래서 검색은 로컬 서버(`.venv`)가 맡고, 에디터는 질의 문장만 보냅니다. 서버는 127.0.0.1에서만 접속을 받습니다.
