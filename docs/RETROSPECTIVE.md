@@ -1,0 +1,129 @@
+# LyraRPG 작업 회고 — UE 5.8 업그레이드와 SemanticBrowser PoC
+
+2026-11-18 · 원본: Claude Docs 문서(작성자 검토)에서 옮김
+
+## 요약
+
+2026-11-17~18 이틀 동안 LyraRPG를 UE 5.8로 올리고(1부), 그 프로젝트의 에셋을 한국어 문장으로 찾는 SemanticBrowser PoC를 끝냈습니다(2부). 한국어 기준 성공 기준 1은 9/10으로 통과했고, 기준 2(absent 비우기)는 사후에 계산한 매우 좁은 임계값 구간에서만 통과했습니다.
+
+- **업그레이드:** 막힌 5건 중 4건은 버전 관리(Perforce 읽기 전용)와 런처·레지스트리 등록 문제였고, 코드 문제는 BuildSettingsVersion 1건이었습니다.
+- **PoC:** SigLIP 2는 이름 검색보다 순위를 잘 매깁니다(영어 통과 9/10 vs 5/10). 다만 한국어 점수가 낮아 임계값으로 "없음"을 판정하기에는 근거가 약합니다.
+- **공통 교훈:** 숫자로 확인하기 전의 판단(플러그인 상태, 라이선스, 배경색 등)은 다섯 번 틀렸고, 원문·로그·테스트로 확인한 뒤에야 바로잡혔습니다.
+
+## 1부. UE 5.7 → 5.8 업그레이드 (2026-11-17)
+
+업그레이드는 끝났고, 막힌 5건은 모두 해결했습니다. 환경은 런처판 UE 5.8.4(기존 5.7.4), Windows, VS 2022, 바닐라 Lyra 기반 C++ 프로젝트, 로컬 Perforce입니다.
+
+| # | 증상 | 원인 | 해결 |
+| --- | --- | --- | --- |
+| 1 | Switch Unreal Engine version 실패: "Couldn't set association… Check the file is writeable" | Perforce 파일이 읽기 전용 | `.uproject` 체크아웃 후 실행 |
+| 2 | 프로젝트 파일 생성 실패: `.vsconfig` UnauthorizedAccessException | `.vsconfig`가 depot에 있어 읽기 전용 | 체크아웃 |
+| 3 | LyraEditor 빌드 환경 충돌: Unreachable/ReturnType/DanglingWarningLevel Off != Error | 낮은 BuildSettingsVersion의 기본 경고 레벨이 5.8 엔진 기본값과 충돌(추정) | 모든 Target.cs(Game/Editor/Client/Server, EOS/Steam 변형 포함)를 `BuildSettingsVersion.V7`, `IncludeOrderVersion = EngineIncludeOrderVersion.Latest`로 |
+| 4 | 런처에서 프로젝트 버전이 "기타"로 표시 | `EngineAssociation`이 GUID로 기록됨. 5.8이 레지스트리(`HKCU\Software\Epic Games\Unreal Engine\Builds`)에 사용자 빌드로 등록돼 있었음 | `"EngineAssociation": "5.8"`로 수정, 레지스트리의 해당 GUID 항목 삭제 |
+| 5 | Version Selector 목록에 5.8 없음 (런처 화면엔 5.8.4 표시) | `C:\ProgramData\Epic\UnrealEngineLauncher\LauncherInstalled.dat`에 UE_5.8 항목 누락. 런처 "검증"으로는 복구 안 됨 | 런처 종료 후 파일 백업 → UE_5.8 항목 수동 추가 |
+
+**주의할 점**
+
+- 업그레이드 중 수정되는 파일(`.uproject`, Target.cs, Build.cs, `Config/*.ini`, `.vsconfig`)은 미리 체크아웃해 둡니다.
+- 런처판 엔진에서는 `BuildEnvironment = Unique`를 쓸 수 없고, `bOverrideBuildEnvironment`는 임시방편입니다.
+- `LauncherInstalled.dat`에 수동으로 넣은 항목은 런처가 파일을 다시 쓸 때(엔진 업데이트·제거) 사라질 수 있습니다. 백업을 보관합니다.
+- VS 2022는 .NET 10 C# 프로젝트(Automation)를 열지 못합니다. C++ 빌드에는 영향이 없고, 필요하면 VS 2026을 씁니다.
+
+Version Selector를 거치지 않고 프로젝트 파일을 만드는 명령:
+
+```
+"C:\Program Files\Epic Games\UE_5.8\Engine\Build\BatchFiles\Build.bat" -projectfiles -project="C:\Unreal Projects\LyraRPG\LyraRPG.uproject" -game -rocket -progress
+```
+
+## 2부. SemanticBrowser PoC (2026-11-17~18)
+
+목적은 "판단이 서는 것"이었고, 결론은 순위 매기기는 쓸 만하지만 임계값 판정은 근거가 약하다는 것입니다. 대상은 `Content/Asian_Village`의 StaticMesh `SM_*` 243개이고, 모델은 `google/siglip2-base-patch16-224`를 로컬 CPU에서 돌렸습니다.
+
+**진행 방식**
+
+1. 정답표(질의 13건: 정답 있음 10, absent 3)를 모델 실행 전에 확정하고 커밋했습니다.
+2. 썸네일: UE 에디터 Python과 SceneCapture2D로 243개를 같은 조건(512×512, 회색 배경, 고정 각도·조명·노출)으로 렌더링했습니다. 성공 243, 실패 0입니다.
+3. 색인: 이미지 임베딩 243×768을 L2 정규화해 `index.npz`에 저장했습니다.
+4. 검색: 점수 = sigmoid(exp(logit_scale) × 코사인 + logit_bias)이고, softmax는 쓰지 않았습니다. 모델 자체 출력과의 차이는 최대 7.6e-7입니다.
+5. 채점: 한국어·영어를 따로 재고, 이름 검색 기준선과 비교하고, 임계값을 로그 격자 61개 점으로 훑었습니다.
+6. 부가 작업: 에디터 연동(로컬 검색 서버 + Output Log 명령), 단위·회귀·에디터 통합 테스트 25개, 에디터 검색 화면 스크린샷 2장을 만들었습니다.
+
+**결과** (`results/20261117_171146/`)
+
+| 항목 | 한국어 | 영어 | 이름 검색(영어) |
+| --- | --- | --- | --- |
+| 기준 1: top-5 통과 (8/10 이상) | 9/10, 통과 | 9/10, 통과 | 5/10 |
+| top-5 안 함정 | 1개 (q08) | 2개 (q08) | 0개 |
+| 구간 A: absent 3건 비고 정답 10건 남음 | 없음 | 없음 | — |
+| 구간 B: absent 3건 비고 정답 8건 이상 남음 | 0.00022876750077403089 < t ≤ 0.00026111684292729885 (격자 1점) | 0.0003105472785481782 < t ≤ 0.002714438979178967 (격자 10점) | — |
+
+- SigLIP만 통과한 질의는 q05, q06, q08, q09입니다. 이름에 없는 표현이나 형태가 다른 단어로 찾는 질의들입니다. 기준선만 통과한 질의는 없습니다.
+- 유일한 실패는 q04 `짚으로 엮은 지붕`입니다. 정답이 한국어 52위, 영어 53위였습니다.
+- 한국어 구간 B는 같은 13건으로 사후에 계산한 값이고 폭이 1.14배뿐이라, 운영 임계값의 근거가 되지 못합니다.
+- 자세한 해석은 저장소 README의 "결과 해석"에 있습니다.
+
+## PoC 중 막힌 문제와 해결
+
+막힌 문제는 대부분 UE 에디터를 스크립트로 자동 실행하는 부분에서 나왔고, 아래 13건은 모두 코드나 설정으로 해결했습니다.
+
+| 영역 | 문제 | 원인 | 해결 |
+| --- | --- | --- | --- |
+| UE 실행 | `-ExecutePythonScript`로 띄우면 스크립트 직후 에디터가 종료됨 | 에디터가 스크립트 실행 후 `QUIT_EDITOR`를 스스로 보냄 | `-ExecCmds="py ..."`로 실행 |
+| UE 실행 | `--names` 인자가 잘려 argparse 오류, 에디터가 종료되지 않고 남음 | `-ExecCmds`는 쉼표를 명령 구분자로 씀 | 구분자를 `+`, `\|`로 바꿈 |
+| UE Python | 임시 레벨 `/Temp/SB_ThumbLevel` 생성 거부 | 같은 경로에 이미 에셋이 있다고 판정 | 레벨 이름에 실행 시각을 붙임 |
+| UE Python | `show_only_actors` 속성 대입 실패 | 템플릿에서 편집 불가한 속성 | `show_only_actor_components()` 함수 사용 |
+| UE Python | `unreal.get_transient_package` 없음 | UE 5.8 Python API에 없는 이름 | `unreal.new_object()`에서 outer 생략 |
+| 썸네일 | 대나무가 끝내 안정되지 않음 | 바람 흔들림(World Position Offset) | WPO를 끔 |
+| 썸네일 | `SM_waterfall`이 끝내 안정되지 않음 | 물이 흐르는 애니메이션 머티리얼 | 300프레임 시점 그림을 저장하고 `note`에 표시 |
+| 썸네일 | 길쭉한 물체가 화면 밖으로 잘림 | 바운딩 구 기준으로 거리 계산 | 바운딩 박스 꼭짓점 8개가 들어오는 거리 × 1.05 |
+| git | `thumbs/CONDITIONS.md`를 커밋할 수 없음 | `thumbs/`가 폴더 통째로 무시됨 | `thumbs/*` + `!thumbs/CONDITIONS.md` |
+| git | `results/<시각>/report.html`이 무시되지 않음 | `results/*.html`은 하위 폴더를 못 막음 | `results/**/*.html` |
+| git | 커밋 거부 | 저장소에 사용자 정보 없음 | 커밋마다 작성자를 지정(전역 설정은 그대로) |
+| 검색 서버 | curl로 보낸 한국어 질의가 깨짐 | Windows curl이 CP949로 인코딩 | UTF-8로 보내는 Python으로 시험 (에디터는 원래 UTF-8) |
+| 스크린샷 | `spawn_registered_tab_by_id`가 항상 `False` | 에디터 유틸리티 위젯 탭이 아니면 열어도 `False` (엔진 구현) | 반환값 대신 `TryInvokeTab failed` 로그로 판단 |
+
+에디터 탭을 열면 사용자 레이아웃 파일(`EditorLayout.json`)이 바뀌어 저장되므로, 실행 전에 백업했다가 끝난 뒤 되돌렸습니다.
+
+## 잘못 판단했다가 바로잡은 것
+
+Claude가 내린 판단 중 다섯 건이 틀렸고, 모두 로그·테스트·원문을 확인한 뒤에 바로잡혔습니다.
+
+| 처음 판단 | 실제 | 어떻게 알았나 |
+| --- | --- | --- |
+| Python Editor Script Plugin이 꺼져 있어 `.uproject`를 고쳐야 한다 | Sequencer Scripting이 의존성으로 켜 두고 있었음 | 사용자가 플러그인 창을 보여 줌, `.uplugin` 의존성과 에디터 로그로 확인 |
+| 기준선에 "진 질의"는 q02, q03, q04 | 지시서 기준(통과 여부)으로는 진 질의 없음. 첫 정답 순위로 비교했던 것 | 과제 부합 점검에서 발견. 결과 파일은 그대로 두고 README 해석에 반영 |
+| `CONDITIONS.md`: 배경색 (130, 130, 130), 243장 모두 같음 | 모서리 중앙값만 130. 실제 배경 픽셀은 129~131 | 에디터 통합 테스트가 모서리별 값을 검사하다 실패 → 문서 정정 |
+| 에셋이 보이는 에디터 스크린샷은 공식 근거가 약하다 | Epic 콘텐츠 라이선스 3(b)항과 Fab EULA 4(b)항이 렌더 이미지 배포를 허용 | 사용자가 조항을 찾아 줌, 원문을 직접 열어 확인 |
+| `TryInvokeTab`이 실패해서 탭이 안 열렸다 | 탭은 열렸고 `False`는 엔진 함수의 특성 | 엔진 소스와 오류 로그 0건 |
+
+**라이선스 확인 결과** (법률 자문 아님)
+
+- Asian_Village는 Lyra 기본 콘텐츠가 아닙니다. 에셋에 원본 FBX 경로(`D:/Ivanov/ST_JP_asian/...`)가 남아 있어, 개인 제작자의 팩으로 보입니다.
+- 렌더 이미지와 스크린샷은 배포할 수 있습니다. Marketplace에서 받았는지 Fab에서 받았는지 몰라도, 두 약관 모두 같은 허용 조항이 있습니다.
+- 에셋 자체를 따로 재배포하는 것은 금지입니다. 다만 협업자와 비공개 저장소로 공유하는 것은 허용됩니다(Fab EULA 5(a)항).
+- 썸네일 PNG 243장 묶음은 문구상 "이미지"이지만 상품 카탈로그와 비슷해서, 직접 정한 규칙대로 커밋하지 않았습니다.
+- NoAI 태그 콘텐츠는 생성형 AI에 쓸 수 없습니다. 하지만 이번 PoC는 학습 없이 검색 순위만 매겨서, Fab EULA 16(l)항의 예외(분류용 프로그램)에 해당한다고 봤습니다.
+
+출처: [Epic 콘텐츠 라이선스](https://www.unrealengine.com/eula/content), [Fab EULA](https://www.fab.com/eula)
+
+## 공통 교훈과 후속 작업
+
+두 작업 모두 코드보다 환경·도구·문서의 숨은 동작에서 시간이 들었고, 확인하기 전의 추측은 자주 틀렸습니다.
+
+**교훈**
+
+- **바뀔 파일을 먼저 열어 둡니다.** 업그레이드는 Perforce 읽기 전용 파일, PoC는 `.gitignore` 패턴과 에디터 레이아웃 파일이 걸렸습니다.
+- **반환값·표시를 그대로 믿지 않습니다.** 런처가 5.8.4를 표시해도 Version Selector는 몰랐고, 탭을 연 함수는 `False`를 돌려줬습니다. 로그·원본 파일·엔진 소스로 확인해야 했습니다.
+- **정답을 먼저 정해야 결과를 믿을 수 있습니다.** 정답표는 모델 실행 전에 커밋했지만, 임계값은 같은 데이터로 사후에 구해 근거가 약해졌습니다.
+- **테스트가 문서의 오류를 잡습니다.** 에디터 통합 테스트가 `CONDITIONS.md`의 배경색 설명 오류를 찾았고, 다시 찍은 썸네일이 픽셀 단위로 재현됨도 확인했습니다.
+- **규칙의 출처는 원문입니다.** 라이선스는 검색 요약·포럼이 아니라 약관 원문을 열어 본 뒤에야 결론이 섰습니다.
+
+**후속 작업**
+
+- [ ] `.vsconfig`, `*.sln`, `*.slnx`를 depot에서 빼고 `.p4ignore`에 추가할지 결정
+- [ ] `LauncherInstalled.dat` 백업 보관, 엔진 업데이트 뒤 UE_5.8 항목이 남아 있는지 확인
+- [ ] Automation(C#)을 열 일이 생기면 VS 2026 설치
+- [ ] 모델 실행 전에 새 질의를 따로 만들어(held-out), 한국어 구간 B의 임계값이 그 질의들에서도 absent를 가르는지 검증
+- [ ] 한국어 질의를 영어로 번역해 검색하는 방식과 비교할지 결정
+- [ ] `report.html`로 눈 검산하고 README 한계 항목에 기입
+- [ ] 에셋이 추가될 때 썸네일·색인을 다시 만드는 과정을 자동화할지 결정
